@@ -10,7 +10,7 @@ import os
 class MovieNight(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
-        intents.message_content = True
+        # Remove privileged intents that aren't needed for slash commands
         super().__init__(command_prefix='!', intents=intents)
     
     async def setup_hook(self):
