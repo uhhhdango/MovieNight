@@ -1,0 +1,28 @@
+Discord Bot Invitation Link Generator
+
+To fix the "Unknown Integration" error, you need to re-invite your bot with the correct permissions.
+
+Your bot application ID appears to be: 1399345880217292840
+
+Use this invitation link to add your bot to the server:
+
+https://discord.com/api/oauth2/authorize?client_id=1399345880217292840&permissions=274877910016&scope=bot%20applications.commands
+
+Required permissions included:
+- Send Messages
+- Use Slash Commands  
+- Embed Links
+- Read Message History
+- View Channels
+
+Steps:
+1. Click the link above
+2. Select your Discord server
+3. Authorize the bot with the listed permissions
+4. Try using /movie command again
+
+If you already have the bot in your server, you may need to:
+1. Kick the current bot from your server
+2. Use the invitation link above to re-add it with proper permissions
+3. Wait 2-3 minutes for Discord to refresh the commands
+4. Try /movie again
