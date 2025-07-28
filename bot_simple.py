@@ -174,9 +174,6 @@ async def movie_command(interaction: discord.Interaction, name: str, time: str):
             )
         except:
             pass
-        await interaction.response.send_message(
-            "❌ An error occurred while processing your request. Please try again.",
-            ephemeral=True)
 
 
 @bot.event
@@ -184,7 +181,6 @@ async def on_command_error(ctx, error):
     """Handle command errors"""
     if isinstance(error, commands.CommandNotFound):
         return  # Ignore unknown commands
-
     print(f"Command error: {error}")
 
 

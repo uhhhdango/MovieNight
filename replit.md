@@ -69,6 +69,11 @@ The application is designed for simple deployment patterns:
 - Lightweight resource requirements
 - No external database or storage dependencies
 
-## Notes
+## Recent Changes
 
-The `/movie` command implementation appears to be incomplete in the provided code - the function cuts off during error handling. The bot structure is well-organized for a simple Discord bot but may need completion of the movie announcement functionality.
+**July 28, 2025**: Added auto-updating countdown feature
+- Implemented background task that updates movie announcements every minute
+- Messages now show live countdown that refreshes automatically ("in 59 minutes" → "in 58 minutes")
+- Auto cleanup removes old announcements 1 hour after movie time passes
+- Enhanced error handling for deleted messages and permission issues
+- Bot successfully updated and deployed to user's Discord server
