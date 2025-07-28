@@ -125,21 +125,39 @@ async def update_movie_announcements():
 async def movie_command(interaction: discord.Interaction, name: str, time: str):
     """Create a movie night announcement with auto-updating countdown"""
     try:
-        # Parse Unix timestamp
-        try:
-            unix_timestamp = int(time)
-        except ValueError:
-            await interaction.response.send_message(
-                "❌ Invalid timestamp format! Please provide a valid Unix timestamp.",
-                ephemeral=True)
-            return
+        # Parse Discord timestamp format <t:timestamp:flag> or plain Unix timestamp
+        unix_timestamp = None
+        
+        if time.startswith('<t:') and time.endswith('>'):
+            # Discord timestamp format: <t:1234567890:F>
+            try:
+                # Extract timestamp from <t:timestamp:flag>
+                timestamp_part = time[3:]  # Remove '<t:'
+                if ':' in timestamp_part:
+                    unix_timestamp = int(timestamp_part.split(':')[0])
+                else:
+                    unix_timestamp = int(timestamp_part[:-1])  # Remove '>'
+            except (ValueError, IndexError):
+                await interaction.response.send_message(
+                    "❌ Invalid Discord timestamp format! Use format: `<t:1234567890:F>`",
+                    ephemeral=True)
+                return
+        else:
+            # Plain Unix timestamp
+            try:
+                unix_timestamp = int(time)
+            except ValueError:
+                await interaction.response.send_message(
+                    "❌ Invalid timestamp format! Use either `<t:1234567890:F>` or plain Unix timestamp.",
+                    ephemeral=True)
+                return
 
         # Convert Unix timestamp to datetime
         try:
             movie_datetime = datetime.fromtimestamp(unix_timestamp, tz=timezone.utc)
         except (ValueError, OSError):
             await interaction.response.send_message(
-                "❌ Invalid timestamp! Please provide a valid Unix timestamp.",
+                "❌ Invalid timestamp! Please provide a valid timestamp.",
                 ephemeral=True)
             return
 
