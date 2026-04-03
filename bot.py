@@ -299,10 +299,7 @@ class ConfirmButton(Button):
 
         role_ping = role.mention
 
-        reschedule_message_id = self.state.get('reschedule_message_id')
-        existing_interested_users = self.state.get('existing_interested_users', [])
-
-        # If rescheduling, delete the old announcement and use its channel
+        # If rescheduling, edit the old announcement instead of deleting and sending new
         if reschedule_message_id:
             old_data = active_announcements.get(reschedule_message_id)
             if old_data:
@@ -310,12 +307,35 @@ class ConfirmButton(Button):
                 if channel:
                     try:
                         old_msg = await channel.fetch_message(reschedule_message_id)
-                        await old_msg.delete()
+                        embed = create_announcement_embed(
+                            host_name=self.state['user'].display_name,
+                            movie_name=self.state['movie_name'],
+                            movie_datetime=movie_datetime,
+                            tmdb_link=self.state.get("tmdb_link"),
+                            overview=self.state.get("overview"),
+                            poster_url=self.state.get("poster_url"),
+                            rating=self.state.get("rating"),
+                            backdrop_url=self.state.get("backdrop_url"),
+                            interested_users=existing_interested_users
+                        )
+                        await old_msg.edit(embed=embed, content=role_ping, allowed_mentions=discord.AllowedMentions(roles=True))
+                        # Update the announcement data in place
+                        active_announcements[reschedule_message_id].update({
+                            'movie_datetime': movie_datetime,
+                            'interested_users': existing_interested_users
+                        })
+                        await interaction.followup.send("✅ Time adjusted successfully!", ephemeral=True)
+                        return
                     except Exception as e:
-                        print(f"Error deleting old announcement during reschedule: {e}")
-                active_announcements.pop(reschedule_message_id, None)
+                        print(f"Error editing announcement during reschedule: {e}")
+                        await interaction.followup.send("❌ Failed to adjust time. Please try again.", ephemeral=True)
+                        return
+                else:
+                    await interaction.followup.send("❌ Could not find the announcement channel.", ephemeral=True)
+                    return
             else:
-                channel = interaction.channel
+                await interaction.followup.send("❌ Original announcement not found.", ephemeral=True)
+                return
         else:
             channel = interaction.channel
 
@@ -356,6 +376,12 @@ class ConfirmButton(Button):
 
                 ticket_view = build_announcement_view(message.id, active_announcements[message.id])
                 await message.edit(view=ticket_view)
+
+        # Delete the ephemeral setup message after confirming
+        try:
+            await interaction.delete_original_response()
+        except Exception:
+            pass
 
 class ScheduleMovieView(View):
     def __init__(self, state):
