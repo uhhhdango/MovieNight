@@ -79,7 +79,7 @@ async def series_autocomplete(interaction: Interaction, current: str):
 class TimezoneSelect(Select):
     def __init__(self, state):
         self.state = state
-        selected_offset = state.get('selected_timezone', 0)
+        selected_offset = state.get('selected_timezone')
 
         options = []
         for offset in range(-12, 13):  # UTC-12 to UTC+14
@@ -90,8 +90,10 @@ class TimezoneSelect(Select):
                 default=False
             ))
 
+        placeholder = f"UTC{selected_offset:+d}" if selected_offset is not None else "What's your timezone?"
+
         super().__init__(
-            placeholder="What's your timezone?",
+            placeholder=placeholder,
             min_values=1,
             max_values=1,
             options=options
