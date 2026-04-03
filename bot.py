@@ -657,6 +657,8 @@ class MovieNightBot(commands.Bot):
         print(f"Logged in as {self.user}")
         if not update_movie_announcements.is_running():
             update_movie_announcements.start()
+        if not ping_health_check.is_running():
+            ping_health_check.start()
 
 
 
@@ -753,6 +755,17 @@ async def series(interaction: Interaction, series_id: str):
         ephemeral=True
     )
 
+
+# Keep the bot awake by pinging the health check endpoint
+@tasks.loop(minutes=30)
+async def ping_health_check():
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get("http://localhost:8000/", timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                if resp.status == 200:
+                    print("[HEALTH] Health check ping successful")
+    except Exception as e:
+        print(f"[HEALTH] Health check ping failed: {e}")
 
 
 @tasks.loop(minutes=1)
