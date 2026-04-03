@@ -6,6 +6,8 @@ Discord Movie Night Bot - Entry point
 import asyncio
 import os
 import sys
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from bot import get_bot
 from dotenv import load_dotenv
 
@@ -17,8 +19,21 @@ def log_status(message: str):
     with open("bot_status.log", "a", encoding="utf-8") as f:
         f.write(message + "\n")
 
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+    def log_message(self, format, *args):
+        pass
+
+def run_health_server():
+    server = HTTPServer(("0.0.0.0", 8080), HealthHandler)
+    server.serve_forever()
+
 def main():
-    load_dotenv()  # Load variables from .env
+    load_dotenv()
 
     token = os.getenv('DISCORD_BOT_TOKEN')
 
@@ -27,6 +42,9 @@ def main():
         print(error_msg)
         log_status(error_msg)
         return
+
+    health_thread = threading.Thread(target=run_health_server, daemon=True)
+    health_thread.start()
 
     bot = get_bot()
 

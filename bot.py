@@ -91,7 +91,7 @@ class TimezoneSelect(Select):
             ))
 
         super().__init__(
-            placeholder="Select Your Timezone",
+            placeholder="What's your timezone?",
             min_values=1,
             max_values=1,
             options=options
@@ -142,7 +142,7 @@ class DateSelect(Select):
 
             options.append(SelectOption(label=label, value=date.isoformat()))
 
-        super().__init__(placeholder="Select Date", min_values=1, max_values=1, options=options)
+        super().__init__(placeholder="What date is the stream?", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: Interaction):
         if interaction.user != self.state['user']:
@@ -163,7 +163,7 @@ class HourSelect(Select):
             hour_12 = hour % 12 or 12
             label = f"{hour_12:02d}:   {suffix}"
             options.append(SelectOption(label=label, value=str(hour)))
-        super().__init__(placeholder="Select Hour", min_values=1, max_values=1, options=options)
+        super().__init__(placeholder="What hour does it start?", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: Interaction):
         if interaction.user != self.state['user']:
@@ -176,7 +176,7 @@ class MinuteSelect(Select):
     def __init__(self, state):
         self.state = state
         options = [SelectOption(label=f":{minute:02d}", value=str(minute)) for minute in range(0, 60, 15)]
-        super().__init__(placeholder="Select Minute", options=options, min_values=1, max_values=1)
+        super().__init__(placeholder="What minute does it start?", options=options, min_values=1, max_values=1)
 
     async def callback(self, interaction: Interaction):
         if interaction.user != self.state['user']:
@@ -296,7 +296,26 @@ class ConfirmButton(Button):
             return
 
         role_ping = role.mention
-        channel = interaction.channel
+
+        reschedule_message_id = self.state.get('reschedule_message_id')
+        existing_interested_users = self.state.get('existing_interested_users', [])
+
+        # If rescheduling, delete the old announcement and use its channel
+        if reschedule_message_id:
+            old_data = active_announcements.get(reschedule_message_id)
+            if old_data:
+                channel = bot.get_channel(old_data['channel_id'])
+                if channel:
+                    try:
+                        old_msg = await channel.fetch_message(reschedule_message_id)
+                        await old_msg.delete()
+                    except Exception as e:
+                        print(f"Error deleting old announcement during reschedule: {e}")
+                active_announcements.pop(reschedule_message_id, None)
+            else:
+                channel = interaction.channel
+        else:
+            channel = interaction.channel
 
         if isinstance(channel, discord.TextChannel):
             embed = create_announcement_embed(
@@ -308,7 +327,7 @@ class ConfirmButton(Button):
                 poster_url=self.state.get("poster_url"),
                 rating=self.state.get("rating"),
                 backdrop_url=self.state.get("backdrop_url"),
-                interested_users=[]  # Or use: None or []
+                interested_users=existing_interested_users
             )
 
             message = await channel.send(
@@ -321,6 +340,7 @@ class ConfirmButton(Button):
                 active_announcements[message.id] = {
                     'channel_id': channel.id,
                     'host_name': self.state['user'].display_name,
+                    'host_id': self.state['user'].id,
                     'movie_name': self.state['movie_name'],
                     'movie_datetime': movie_datetime,
                     'tmdb_link': self.state.get("tmdb_link"),
@@ -329,12 +349,10 @@ class ConfirmButton(Button):
                     'rating': self.state.get("rating"),
                     'backdrop_url': self.state.get("backdrop_url"),
                     'notified_10min': False,
-                    'interested_users': []
+                    'interested_users': list(existing_interested_users)
                 }
 
-                ticket_view = View(timeout=None)
-                ticket_view.add_item(TakeTicketButton(message.id))
-                ticket_view.add_item(ShowAttendeesButton(message.id))
+                ticket_view = build_announcement_view(message.id, active_announcements[message.id])
                 await message.edit(view=ticket_view)
 
 class ScheduleMovieView(View):
@@ -410,18 +428,63 @@ class TakeTicketButton(Button):
                     interested_users=movie_data.get("interested_users", [])
                 )
 
-                view = View(timeout=None)
-                btn = TakeTicketButton(self.message_id)
-                if (now - movie_data['movie_datetime']).total_seconds() > 7200:
-                    btn.disabled = True
-                view.add_item(btn)
-                view.add_item(ShowAttendeesButton(self.message_id))
+                view = build_announcement_view(self.message_id, movie_data)
                 if msg:
                     await msg.edit(embed=updated_embed, view=view)
             except Exception as e:
                 print(f"Error updating message after ticket taken: {e}")
         await interaction.response.send_message(
             f"✅ You have received the ticket for the movie **{movie_data['movie_name']}**! I will notify you 10 minutes before the movie starts!",
+            ephemeral=True
+        )
+
+
+class RetrieveTicketButton(Button):
+    def __init__(self, message_id):
+        super().__init__(label="🎟️ Retrieve ticket", style=discord.ButtonStyle.secondary, custom_id=f"retrieve_{message_id}")
+        self.message_id = message_id
+
+    async def callback(self, interaction: Interaction):
+        user = interaction.user
+        movie_data = active_announcements.get(self.message_id)
+
+        if not movie_data:
+            await interaction.response.send_message("❌ This event no longer exists.", ephemeral=True)
+            return
+
+        if user.id == movie_data.get('host_id'):
+            await interaction.response.send_message("❌ The host cannot retrieve a ticket.", ephemeral=True)
+            return
+
+        if user.id not in movie_data['interested_users']:
+            await interaction.response.send_message("❌ You don't have a ticket for this event to retrieve.", ephemeral=True)
+            return
+
+        movie_data['interested_users'].remove(user.id)
+
+        channel = bot.get_channel(movie_data['channel_id'])
+        if channel:
+            try:
+                msg = await channel.fetch_message(self.message_id)
+                updated_embed = create_announcement_embed(
+                    host_name=movie_data['host_name'],
+                    movie_name=movie_data['movie_name'],
+                    movie_datetime=movie_data['movie_datetime'],
+                    tmdb_link=movie_data.get("tmdb_link"),
+                    overview=movie_data.get("overview"),
+                    poster_url=movie_data.get("poster_url"),
+                    rating=movie_data.get("rating"),
+                    backdrop_url=movie_data.get("backdrop_url"),
+                    interested_users=movie_data.get("interested_users", [])
+                )
+                view = build_announcement_view(self.message_id, movie_data)
+                if msg:
+                    await msg.edit(embed=updated_embed, view=view)
+            except Exception as e:
+                print(f"Error updating message after ticket retrieval: {e}")
+
+        await interaction.response.send_message(
+            f"✅ Your ticket for **{movie_data['movie_name']}** has been retrieved. You will no longer be notified.",
             ephemeral=True
         )
 
@@ -454,6 +517,90 @@ class ShowAttendeesButton(Button):
         )
 
 
+
+
+class CancelButton(Button):
+    def __init__(self, message_id):
+        super().__init__(label="❌ Cancel", style=discord.ButtonStyle.danger, custom_id=f"cancel_{message_id}")
+        self.message_id = message_id
+
+    async def callback(self, interaction: Interaction):
+        movie_data = active_announcements.get(self.message_id)
+        if not movie_data:
+            await interaction.response.send_message("❌ This event no longer exists.", ephemeral=True)
+            return
+
+        if interaction.user.id != movie_data.get('host_id'):
+            await interaction.response.send_message("❌ Only the host can cancel this event.", ephemeral=True)
+            return
+
+        movie_name = movie_data['movie_name']
+        channel = bot.get_channel(movie_data['channel_id'])
+
+        await interaction.response.defer()
+
+        if channel:
+            try:
+                msg = await channel.fetch_message(self.message_id)
+                await msg.delete()
+            except Exception as e:
+                print(f"Error deleting announcement: {e}")
+
+        active_announcements.pop(self.message_id, None)
+
+        if channel:
+            await channel.send(f"❌ **{movie_name}** has been canceled.")
+
+
+class AdjustButton(Button):
+    def __init__(self, message_id):
+        super().__init__(label="🕐 Adjust Time", style=discord.ButtonStyle.secondary, custom_id=f"adjust_{message_id}")
+        self.message_id = message_id
+
+    async def callback(self, interaction: Interaction):
+        movie_data = active_announcements.get(self.message_id)
+        if not movie_data:
+            await interaction.response.send_message("❌ This event no longer exists.", ephemeral=True)
+            return
+
+        if interaction.user.id != movie_data.get('host_id'):
+            await interaction.response.send_message("❌ Only the host can adjust the time.", ephemeral=True)
+            return
+
+        state = {
+            'movie_name': movie_data['movie_name'],
+            'user': interaction.user,
+            'tmdb_link': movie_data.get('tmdb_link'),
+            'overview': movie_data.get('overview'),
+            'poster_url': movie_data.get('poster_url'),
+            'rating': movie_data.get('rating'),
+            'backdrop_url': movie_data.get('backdrop_url'),
+            'reschedule_message_id': self.message_id,
+            'existing_interested_users': list(movie_data.get('interested_users', [])),
+        }
+
+        view = ScheduleMovieView(state)
+        state['view'] = view
+
+        await interaction.response.send_message(
+            f"🕐 Pick a new time for **{movie_data['movie_name']}**:",
+            view=view,
+            ephemeral=True
+        )
+
+
+def build_announcement_view(message_id, movie_data):
+    now_utc = datetime.now(timezone.utc)
+    view = View(timeout=None)
+    btn = TakeTicketButton(message_id)
+    if (now_utc - movie_data['movie_datetime']).total_seconds() > 7200:
+        btn.disabled = True
+    view.add_item(btn)
+    view.add_item(RetrieveTicketButton(message_id))
+    view.add_item(ShowAttendeesButton(message_id))
+    view.add_item(AdjustButton(message_id))
+    view.add_item(CancelButton(message_id))
+    return view
 
 
 # 🔧 ONLY THIS FUNCTION WAS MODIFIED
@@ -651,13 +798,7 @@ async def update_movie_announcements():
                 )
 
 
-                # Disable ticket button if expired
-                ticket_view = View(timeout=None)
-                btn = TakeTicketButton(msg_id)
-                if (now - data['movie_datetime']).total_seconds() > 7200:
-                    btn.disabled = True
-                ticket_view.add_item(btn)
-                ticket_view.add_item(ShowAttendeesButton(msg_id))
+                ticket_view = build_announcement_view(msg_id, data)
                 await message.edit(embed=new_embed, view=ticket_view)
 
             except (discord.NotFound, discord.Forbidden):
