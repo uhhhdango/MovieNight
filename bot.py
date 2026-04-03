@@ -142,7 +142,7 @@ class DateSelect(Select):
 
             options.append(SelectOption(label=label, value=date.isoformat()))
 
-        super().__init__(placeholder="What date is the stream?", min_values=1, max_values=1, options=options)
+        super().__init__(placeholder="Select a date for the stream", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: Interaction):
         if interaction.user != self.state['user']:
@@ -163,7 +163,7 @@ class HourSelect(Select):
             hour_12 = hour % 12 or 12
             label = f"{hour_12:02d}:   {suffix}"
             options.append(SelectOption(label=label, value=str(hour)))
-        super().__init__(placeholder="What hour does it start?", min_values=1, max_values=1, options=options)
+        super().__init__(placeholder="Stream starts at (hour)", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: Interaction):
         if interaction.user != self.state['user']:
@@ -176,7 +176,7 @@ class MinuteSelect(Select):
     def __init__(self, state):
         self.state = state
         options = [SelectOption(label=f":{minute:02d}", value=str(minute)) for minute in range(0, 60, 15)]
-        super().__init__(placeholder="What minute does it start?", options=options, min_values=1, max_values=1)
+        super().__init__(placeholder="(minute)", options=options, min_values=1, max_values=1)
 
     async def callback(self, interaction: Interaction):
         if interaction.user != self.state['user']:
