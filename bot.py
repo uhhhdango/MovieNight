@@ -87,7 +87,7 @@ class TimezoneSelect(Select):
             options.append(SelectOption(
                 label=label,
                 value=str(offset),
-                default=(offset == selected_offset)  # ← this line preserves selection
+                default=False
             ))
 
         super().__init__(
