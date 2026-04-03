@@ -299,6 +299,9 @@ class ConfirmButton(Button):
 
         role_ping = role.mention
 
+        reschedule_message_id = self.state.get('reschedule_message_id')
+        existing_interested_users = self.state.get('existing_interested_users', [])
+
         # If rescheduling, edit the old announcement instead of deleting and sending new
         if reschedule_message_id:
             old_data = active_announcements.get(reschedule_message_id)
