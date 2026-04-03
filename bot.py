@@ -783,7 +783,7 @@ async def series(interaction: Interaction, series_id: str):
 
 
 # Keep the bot awake by pinging the health check endpoint
-@tasks.loop(minutes=30)
+@tasks.loop(minutes=20)
 async def ping_health_check():
     try:
         async with aiohttp.ClientSession() as session:
